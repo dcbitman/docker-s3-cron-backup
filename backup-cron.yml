@@ -1,0 +1,70 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: backup
+  namespace: default
+  labels:
+    app: backup
+spec:
+  concurrencyPolicy: Replace
+  schedule: "0 1 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - args:
+            - /bin/sh
+            - -c
+            - /scripts/dobackup.sh
+            name: cron-backup
+            image: cron-backup
+            imagePullPolicy: Always
+            resources:
+              limits:
+                cpu: "1"
+                memory: 2G
+              requests:
+                cpu: 50m
+                memory: 350M
+            env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: backup-secret
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backup-secret
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: backup-secret
+                  key: AWS_DEFAULT_REGION
+            - name: S3_BUCKET_URL
+              value: "s3://s3-backup/backup"
+            - name: BACKUP_NAME
+              value: "backupt"
+            - name: BACKUP_PATH
+              value: "/para"
+            volumeMounts:
+              - mountPath: /data
+                name: data
+              - mountPath: /scripts
+                name: backup-scripts
+          restartPolicy: OnFailure
+          schedulerName: default-scheduler
+          securityContext:
+            fsGroup: 0
+            runAsUser: 0
+          terminationGracePeriodSeconds: 30
+          volumes:
+          - name: data
+            persistentVolumeClaim:
+              claimName: data-pvc
+          - name: backup-scripts
+            configMap:
+              name: backup-scripts
+              defaultMode: 0744
